@@ -1,0 +1,16 @@
+google-genai>=1.0.0
+pydantic>=2.0
+pydantic-settings>=2.0
+pyyaml>=6.0
+python-dotenv>=1.0
+rank-bm25>=0.2.2
+numpy>=1.24
+datasets>=2.14
+rouge-score>=0.1.2
+matplotlib>=3.7
+seaborn>=0.12
+pandas>=2.0
+tqdm>=4.65
+pytest>=7.4
+jupyter>=1.0
+nbformat>=5.9
