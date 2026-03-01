@@ -1,0 +1,61 @@
+# ── Model Configuration ──
+models:
+  fast: "gemini-2.0-flash"
+  pro: "gemini-1.5-pro"
+  embedding: "text-embedding-004"
+
+# ── Budget ──
+budget:
+  max_dollars: 410.0
+  warn_at_dollars: 350.0
+
+# ── Chunking ──
+chunking:
+  chunk_size: 512        # tokens (approx words)
+  chunk_overlap: 64
+  min_chunk_size: 50
+
+# ── Retrieval ──
+retrieval:
+  bm25_top_k: 20
+  vector_top_k: 20
+  hybrid_top_k: 10
+  rrf_k: 60              # RRF constant
+
+# ── RLM Controller ──
+rlm:
+  max_depth: 3
+  confidence_threshold: 0.7
+  max_sub_questions: 3
+  max_chunks_per_step: 5
+
+# ── Baselines ──
+fullcontext:
+  max_input_tokens: 900000    # Gemini 2.0 Flash context
+
+rag:
+  top_k: 10
+
+mapreduce:
+  map_chunk_count: 10
+  reduce_max_tokens: 4096
+
+# ── Benchmarks ──
+benchmarks:
+  needle_haystack:
+    haystack_lengths: [1000, 5000, 10000, 25000, 50000, 100000]
+    needle_positions: [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
+    num_samples: 5
+  multihop:
+    num_samples: 30
+    hops: [2, 3]
+    doc_length: 10000
+  longbench:
+    datasets: ["qasper", "narrativeqa"]
+    max_samples: 50
+
+# ── Experiment ──
+experiment:
+  seed: 42
+  methods: ["fullcontext", "rag", "mapreduce", "rlm"]
+  output_dir: "results"
