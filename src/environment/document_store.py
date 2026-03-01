@@ -28,9 +28,11 @@ class DocumentStore:
         self,
         chunk_size: int | None = None,
         chunk_overlap: int | None = None,
+        min_chunk_size: int | None = None,
     ):
         self.chunk_size = chunk_size or settings.chunk_size
         self.chunk_overlap = chunk_overlap or settings.chunk_overlap
+        self.min_chunk_size = min_chunk_size or settings.min_chunk_size
         self.chunks: list[Chunk] = []
         self.full_text: str = ""
         self.doc_id: str = ""
@@ -53,7 +55,7 @@ class DocumentStore:
             end = min(idx + self.chunk_size, len(words))
             chunk_words = words[idx:end]
 
-            if len(chunk_words) < settings.min_chunk_size and chunks:
+            if len(chunk_words) < self.min_chunk_size and chunks:
                 # Merge small trailing chunk into previous
                 prev = chunks[-1]
                 merged_text = prev.text + " " + " ".join(chunk_words)

@@ -5,7 +5,7 @@ from src.environment.document_store import DocumentStore
 
 
 def test_ingest_creates_chunks():
-    store = DocumentStore(chunk_size=10, chunk_overlap=2)
+    store = DocumentStore(chunk_size=10, chunk_overlap=2, min_chunk_size=3)
     text = " ".join(f"word{i}" for i in range(50))
     chunks = store.ingest(text)
 
@@ -15,7 +15,7 @@ def test_ingest_creates_chunks():
 
 
 def test_chunk_ids_sequential():
-    store = DocumentStore(chunk_size=10, chunk_overlap=2)
+    store = DocumentStore(chunk_size=10, chunk_overlap=2, min_chunk_size=3)
     text = " ".join(f"word{i}" for i in range(50))
     chunks = store.ingest(text)
 
@@ -24,7 +24,7 @@ def test_chunk_ids_sequential():
 
 
 def test_get_chunk():
-    store = DocumentStore(chunk_size=10, chunk_overlap=2)
+    store = DocumentStore(chunk_size=10, chunk_overlap=2, min_chunk_size=3)
     text = " ".join(f"word{i}" for i in range(50))
     store.ingest(text)
 
@@ -37,7 +37,7 @@ def test_get_chunk():
 
 
 def test_get_chunks_text():
-    store = DocumentStore(chunk_size=10, chunk_overlap=2)
+    store = DocumentStore(chunk_size=10, chunk_overlap=2, min_chunk_size=3)
     text = " ".join(f"word{i}" for i in range(50))
     store.ingest(text)
 
