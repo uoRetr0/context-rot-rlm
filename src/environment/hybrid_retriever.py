@@ -35,11 +35,11 @@ class HybridRetriever:
         bm25_results = self.bm25.search(query)
         vec_results = self.vector.search(query)
 
-        return self._rrf_fuse(bm25_results, vec_results, k)
+        return self._rrf_fuse([bm25_results, vec_results], k)
 
     def _rrf_fuse(
         self,
-        *result_lists: list[tuple[int, float]],
+        result_lists: list[list[tuple[int, float]]],
         top_k: int | None = None,
     ) -> list[tuple[int, float]]:
         """Reciprocal Rank Fusion."""
