@@ -14,11 +14,11 @@ from src.cost_tracker import tracker
 
 logger = logging.getLogger(__name__)
 
-# Pricing per 1M tokens (USD) — as of 2025-Q4
+# Pricing per 1M tokens (USD)
 _PRICING: dict[str, dict[str, float]] = {
     "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "text-embedding-004": {"input": 0.006, "output": 0.0},
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
+    "gemini-embedding-001": {"input": 0.006, "output": 0.0},
 }
 
 _client: genai.Client | None = None
