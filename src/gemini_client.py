@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any
 
 from google import genai
@@ -22,6 +23,8 @@ _PRICING: dict[str, dict[str, float]] = {
 }
 
 _client: genai.Client | None = None
+_last_call_time: float = 0.0
+_MIN_CALL_INTERVAL: float = 0.3  # seconds between API calls to avoid rate limits
 
 
 def _get_client() -> genai.Client:
@@ -54,11 +57,31 @@ def generate(
     if json_mode:
         config.response_mime_type = "application/json"
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=config,
-    )
+    global _last_call_time
+    max_retries = 6
+    for attempt in range(max_retries):
+        # Rate limit: wait if calling too fast
+        elapsed = time.time() - _last_call_time
+        if elapsed < _MIN_CALL_INTERVAL:
+            time.sleep(_MIN_CALL_INTERVAL - elapsed)
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=config,
+            )
+            _last_call_time = time.time()
+            break
+        except Exception as e:
+            err_str = str(e)
+            if any(k in err_str for k in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE")):
+                wait = min(2 ** attempt + 1, 60)
+                logger.warning("API error, retrying in %ds (attempt %d/%d): %s", wait, attempt + 1, max_retries, err_str[:80])
+                time.sleep(wait)
+                if attempt == max_retries - 1:
+                    raise
+            else:
+                raise
 
     input_tokens = response.usage_metadata.prompt_token_count or 0
     output_tokens = response.usage_metadata.candidates_token_count or 0
@@ -101,10 +124,24 @@ def embed(texts: list[str], *, model: str | None = None) -> list[list[float]]:
     tracker.check_budget()
 
     client = _get_client()
-    response = client.models.embed_content(
-        model=model,
-        contents=texts,
-    )
+    max_retries = 6
+    for attempt in range(max_retries):
+        try:
+            response = client.models.embed_content(
+                model=model,
+                contents=texts,
+            )
+            break
+        except Exception as e:
+            err_str = str(e)
+            if any(k in err_str for k in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE")):
+                wait = min(2 ** attempt + 1, 60)
+                logger.warning("Embed API error, retrying in %ds (attempt %d/%d)", wait, attempt + 1, max_retries)
+                time.sleep(wait)
+                if attempt == max_retries - 1:
+                    raise
+            else:
+                raise
 
     total_tokens = sum(len(t.split()) * 1.3 for t in texts)  # rough estimate
     tracker.record(model, int(total_tokens), 0)

@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     rlm_confidence_threshold: float = _YAML["rlm"]["confidence_threshold"]
     rlm_max_sub_questions: int = _YAML["rlm"]["max_sub_questions"]
     rlm_max_chunks_per_step: int = _YAML["rlm"]["max_chunks_per_step"]
+    rlm_initial_chunks: int = _YAML["rlm"]["initial_chunks"]
+    rlm_sub_question_chunks: int = _YAML["rlm"]["sub_question_chunks"]
 
     # Baselines
     fullcontext_max_tokens: int = _YAML["fullcontext"]["max_input_tokens"]

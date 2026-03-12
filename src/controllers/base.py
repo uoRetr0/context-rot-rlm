@@ -23,6 +23,7 @@ class BaseController(ABC):
     """Abstract base for all QA controllers."""
 
     method_name: str = "base"
+    requires_retriever: bool = True
 
     @abstractmethod
     def answer(

@@ -11,20 +11,29 @@ from src.gemini_client import generate_json
 from src.trace.tracer import TraceNode
 
 SYSTEM = """You are a precise question-answering system. Answer the question based ONLY on the provided document.
-Respond with JSON: {"answer": "...", "confidence": 0.0-1.0, "reasoning": "..."}"""
+
+Respond with JSON: {"answer": "...", "confidence": 0.0-1.0, "reasoning": "..."}
+
+IMPORTANT:
+- The "answer" field must be SHORT: just the final fact, name, place, number, or brief phrase.
+- Do not return a full sentence in the "answer" field.
+- Put any explanation in "reasoning"."""
 
 PROMPT = """Document:
 {document}
 
 Question: {question}
 
-Answer based only on the document above. Respond as JSON with keys: answer, confidence, reasoning."""
+Answer based only on the document above.
+IMPORTANT: The "answer" field must be SHORT and answer-only, not a full sentence.
+Respond as JSON with keys: answer, confidence, reasoning."""
 
 
 class FullContextController(BaseController):
     """Sends the entire document as context to the LLM."""
 
     method_name = "fullcontext"
+    requires_retriever = False
 
     def __init__(self, model: str | None = None):
         self.model = model or settings.model_fast

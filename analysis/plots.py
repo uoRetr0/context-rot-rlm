@@ -45,10 +45,19 @@ def _load(filename: str) -> pd.DataFrame:
             "method": r["method"],
             "confidence": r["confidence"],
             "duration_s": r["duration_s"],
+            "cost_usd": r.get("cost_usd", 0.0),
+            "llm_calls": r.get("llm_calls", 0),
+            "status": r.get(
+                "status",
+                "error" if r.get("predicted") == "ERROR" or r.get("metadata", {}).get("error") else "ok",
+            ),
             **r["metrics"],
             **r.get("metadata", {}),
         })
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    if "status" in df.columns:
+        df = df[df["status"] == "ok"].copy()
+    return df
 
 
 def _save(fig: plt.Figure, name: str) -> None:
@@ -132,15 +141,34 @@ def plot_needle_by_position() -> None:
 
 
 def plot_multihop_comparison() -> None:
-    """Bar chart: F1 by method and hop count."""
+    """Bar chart: F1 by method, grouped by hops x doc_length when multi-length data present."""
     df = _load("multihop")
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-    pivot = df.pivot_table(values="f1", index="hops", columns="method", aggfunc="mean")
+    has_multi_length = "doc_length" in df.columns and df["doc_length"].nunique() > 1
 
+    if has_multi_length:
+        # Grouped bar by condition (hops x doc_length)
+        df["group"] = df.apply(
+            lambda r: f"{r['hops']}-hop\n{r['doc_length'] // 1000}K", axis=1
+        )
+        df["sort_key"] = df["hops"] * 1_000_000 + df["doc_length"]
+        group_order = (
+            df[["group", "sort_key"]]
+            .drop_duplicates()
+            .sort_values("sort_key")["group"]
+            .tolist()
+        )
+        pivot = df.pivot_table(values="f1", index="group", columns="method", aggfunc="mean")
+        pivot = pivot.reindex(group_order)
+    else:
+        pivot = df.pivot_table(values="f1", index="hops", columns="method", aggfunc="mean")
+
+    fig, ax = plt.subplots(figsize=(max(10, len(pivot.index) * 2), 6))
+    methods = sorted(pivot.columns)
     x = np.arange(len(pivot.index))
-    width = 0.18
-    for i, method in enumerate(sorted(pivot.columns)):
+    width = 0.8 / len(methods)
+
+    for i, method in enumerate(methods):
         vals = pivot[method].values
         ax.bar(
             x + i * width, vals, width,
@@ -148,14 +176,107 @@ def plot_multihop_comparison() -> None:
             color=METHOD_COLORS.get(method),
         )
 
-    ax.set_xlabel("Number of Hops")
+    ax.set_xlabel("Condition (Hops × Document Length)" if has_multi_length else "Number of Hops")
     ax.set_ylabel("F1 Score")
-    ax.set_title("Multi-Hop QA: F1 by Method and Hop Count")
-    ax.set_xticks(x + width * (len(pivot.columns) - 1) / 2)
-    ax.set_xticklabels([f"{h}-hop" for h in pivot.index])
+    ax.set_title("Multi-Hop QA: F1 by Method and Condition")
+    ax.set_xticks(x + width * (len(methods) - 1) / 2)
+    if has_multi_length:
+        ax.set_xticklabels(pivot.index)
+    else:
+        ax.set_xticklabels([f"{h}-hop" for h in pivot.index])
     ax.legend()
     ax.set_ylim(0, 1.05)
     _save(fig, "multihop_comparison")
+
+
+def plot_multihop_heatmap() -> None:
+    """3-panel heatmap: RAG F1 / RLM F1 / delta by hops × doc_length."""
+    df = _load("multihop")
+    if "doc_length" not in df.columns or df["doc_length"].nunique() <= 1:
+        return
+
+    df["doc_length_k"] = df["doc_length"] // 1000
+
+    panels = []
+    for method in ["rag", "rlm"]:
+        sub = df[df["method"] == method]
+        if sub.empty:
+            continue
+        pivot = sub.pivot_table(values="f1", index="doc_length_k", columns="hops", aggfunc="mean")
+        panels.append((METHOD_LABELS.get(method, method), pivot))
+
+    if len(panels) < 2:
+        return
+
+    # Compute delta (RLM - RAG)
+    delta = panels[1][1] - panels[0][1]
+    panels.append(("RLM − RAG (Δ F1)", delta))
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5), sharey=True)
+    for ax, (title, pivot) in zip(axes, panels):
+        vmin, vmax = (-0.3, 0.3) if "Δ" in title else (0, 1)
+        cmap = "RdBu_r" if "Δ" in title else "RdYlGn"
+        sns.heatmap(
+            pivot, ax=ax, vmin=vmin, vmax=vmax, cmap=cmap,
+            annot=True, fmt=".2f", cbar=True,
+        )
+        ax.set_title(title)
+        ax.set_ylabel("Document Length (K words)" if ax == axes[0] else "")
+        ax.set_xlabel("Hops")
+
+    fig.suptitle("Multi-Hop: F1 by Document Length × Hops", fontsize=14, y=1.02)
+    _save(fig, "multihop_heatmap")
+
+
+def plot_pro_musique_comparison() -> None:
+    """Grouped bar chart: Pro model MuSiQue results by condition."""
+    frames = []
+    for name in ["musique_pro_phaseA", "musique_pro_phaseB"]:
+        try:
+            frames.append(_load(name))
+        except FileNotFoundError:
+            continue
+
+    if not frames:
+        return
+
+    df = pd.concat(frames, ignore_index=True)
+
+    df["group"] = df.apply(
+        lambda r: f"{r['hops']}-hop\n{r['doc_length'] // 1000}K", axis=1
+    )
+    df["sort_key"] = df["hops"] * 1_000_000 + df["doc_length"]
+    group_order = (
+        df[["group", "sort_key"]]
+        .drop_duplicates()
+        .sort_values("sort_key")["group"]
+        .tolist()
+    )
+
+    pivot = df.pivot_table(values="f1", index="group", columns="method", aggfunc="mean")
+    pivot = pivot.reindex(group_order)
+
+    methods = sorted(pivot.columns)
+    fig, ax = plt.subplots(figsize=(max(10, len(pivot.index) * 2), 6))
+    x = np.arange(len(pivot.index))
+    width = 0.35
+
+    for i, method in enumerate(methods):
+        vals = pivot[method].values
+        ax.bar(
+            x + i * width - width / 2, vals, width,
+            label=METHOD_LABELS.get(method, method),
+            color=METHOD_COLORS.get(method),
+        )
+
+    ax.set_xlabel("Condition (Hops × Document Length)")
+    ax.set_ylabel("F1 Score")
+    ax.set_title("MuSiQue (Pro Model): RAG vs RLM by Condition")
+    ax.set_xticks(x)
+    ax.set_xticklabels(pivot.index)
+    ax.legend()
+    ax.set_ylim(0, 1.05)
+    _save(fig, "pro_musique_comparison")
 
 
 def plot_longbench_comparison() -> None:
@@ -180,10 +301,54 @@ def plot_longbench_comparison() -> None:
     _save(fig, "longbench_comparison")
 
 
+def plot_musique_comparison() -> None:
+    """Grouped bar chart: F1 by (hops x doc_length) for RAG vs RLM."""
+    df = _load("musique")
+
+    # Create a combined group label like "2-hop\n10K"
+    df["group"] = df.apply(
+        lambda r: f"{r['hops']}-hop\n{r['doc_length'] // 1000}K", axis=1
+    )
+
+    # Sort groups logically: by hops then doc_length
+    df["sort_key"] = df["hops"] * 1_000_000 + df["doc_length"]
+    group_order = (
+        df[["group", "sort_key"]]
+        .drop_duplicates()
+        .sort_values("sort_key")["group"]
+        .tolist()
+    )
+
+    pivot = df.pivot_table(values="f1", index="group", columns="method", aggfunc="mean")
+    pivot = pivot.reindex(group_order)
+
+    methods = sorted(pivot.columns)
+    fig, ax = plt.subplots(figsize=(12, 6))
+    x = np.arange(len(pivot.index))
+    width = 0.35
+
+    for i, method in enumerate(methods):
+        vals = pivot[method].values
+        ax.bar(
+            x + i * width - width / 2, vals, width,
+            label=METHOD_LABELS.get(method, method),
+            color=METHOD_COLORS.get(method),
+        )
+
+    ax.set_xlabel("Condition (Hops x Document Length)")
+    ax.set_ylabel("F1 Score")
+    ax.set_title("MuSiQue: RAG vs RLM by Hop Count and Document Length")
+    ax.set_xticks(x)
+    ax.set_xticklabels(pivot.index)
+    ax.legend()
+    ax.set_ylim(0, 1.05)
+    _save(fig, "musique_comparison")
+
+
 def plot_overall_summary() -> None:
     """Summary bar chart across all benchmarks."""
     dfs = {}
-    for name in ["needle_haystack", "multihop", "longbench"]:
+    for name in ["needle_haystack", "multihop", "longbench", "musique"]:
         try:
             dfs[name] = _load(name)
         except FileNotFoundError:
@@ -216,6 +381,52 @@ def plot_overall_summary() -> None:
     _save(fig, "overall_summary")
 
 
+def plot_efficiency_frontier() -> None:
+    """Scatter plot: mean cost vs mean F1 for each benchmark."""
+    benchmarks = ["needle_haystack", "multihop", "longbench", "musique"]
+    frames: list[tuple[str, pd.DataFrame]] = []
+    for name in benchmarks:
+        try:
+            df = _load(name)
+        except FileNotFoundError:
+            continue
+        if not df.empty:
+            frames.append((name, df))
+
+    if not frames:
+        return
+
+    fig, axes = plt.subplots(1, len(frames), figsize=(5 * len(frames), 5), squeeze=False)
+    flat_axes = axes[0]
+
+    for ax, (name, df) in zip(flat_axes, frames):
+        summary = df.groupby("method")[["f1", "cost_usd", "duration_s"]].mean().reset_index()
+        for _, row in summary.iterrows():
+            method = row["method"]
+            ax.scatter(
+                row["cost_usd"],
+                row["f1"],
+                s=max(80, row["duration_s"] * 8),
+                color=METHOD_COLORS.get(method),
+                alpha=0.85,
+            )
+            ax.annotate(
+                METHOD_LABELS.get(method, method),
+                (row["cost_usd"], row["f1"]),
+                textcoords="offset points",
+                xytext=(6, 4),
+            )
+
+        ax.set_title(name.replace("_", " ").title())
+        ax.set_xlabel("Mean Cost per Sample (USD)")
+        ax.set_ylabel("Mean F1")
+        ax.set_ylim(0, 1.05)
+        ax.set_xscale("log")
+
+    fig.suptitle("Accuracy vs Cost Frontier (marker size = latency)", fontsize=14, y=1.02)
+    _save(fig, "efficiency_frontier")
+
+
 def generate_all_plots() -> None:
     """Generate all plots."""
     logging.basicConfig(level=logging.INFO)
@@ -225,8 +436,12 @@ def generate_all_plots() -> None:
         plot_needle_by_length,
         plot_needle_by_position,
         plot_multihop_comparison,
+        plot_multihop_heatmap,
         plot_longbench_comparison,
+        plot_musique_comparison,
+        plot_pro_musique_comparison,
         plot_overall_summary,
+        plot_efficiency_frontier,
     ]
 
     for fn in plot_fns:
