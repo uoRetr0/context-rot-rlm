@@ -37,3 +37,16 @@ def test_summary():
 
     assert "gemini-2.0-flash" in summary
     assert "TOTAL" in summary
+
+
+def test_snapshot_delta():
+    ct = CostTracker(max_dollars=100, warn_at=80)
+    snap = ct.snapshot()
+
+    ct.record("gemini-2.0-flash", 2000, 1000)
+    delta = ct.delta(snap)
+
+    assert delta.input_tokens == 2000
+    assert delta.output_tokens == 1000
+    assert delta.calls == 1
+    assert delta.cost_usd > 0

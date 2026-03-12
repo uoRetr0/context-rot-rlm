@@ -13,7 +13,11 @@ from src.tools.search_tool import SearchTool
 from src.trace.tracer import TraceNode
 
 MAP_SYSTEM = """You answer questions using ONLY the provided text chunk.
-Respond with JSON: {"answer": "...", "confidence": 0.0-1.0, "relevant": true/false}"""
+Respond with JSON: {"answer": "...", "confidence": 0.0-1.0, "relevant": true/false}
+
+IMPORTANT:
+- If the chunk is relevant, the "answer" field must be SHORT and answer-only.
+- Do not use a full sentence in the "answer" field."""
 
 MAP_PROMPT = """Chunk:
 {chunk}
@@ -21,10 +25,15 @@ MAP_PROMPT = """Chunk:
 Question: {question}
 
 If this chunk contains relevant info, answer the question. Otherwise set relevant=false.
+IMPORTANT: If relevant=true, the "answer" field must be SHORT and answer-only.
 Respond as JSON with keys: answer, confidence, relevant."""
 
 REDUCE_SYSTEM = """You synthesize a final answer from multiple partial answers.
-Respond with JSON: {"answer": "...", "confidence": 0.0-1.0, "reasoning": "..."}"""
+Respond with JSON: {"answer": "...", "confidence": 0.0-1.0, "reasoning": "..."}
+
+IMPORTANT:
+- The "answer" field must be SHORT and answer-only.
+- Do not use a full sentence in the "answer" field."""
 
 REDUCE_PROMPT = """Question: {question}
 
@@ -32,6 +41,7 @@ Partial answers from different document sections:
 {partial_answers}
 
 Synthesize the best final answer from these partial answers.
+IMPORTANT: The "answer" field must be SHORT and answer-only.
 Respond as JSON with keys: answer, confidence, reasoning."""
 
 

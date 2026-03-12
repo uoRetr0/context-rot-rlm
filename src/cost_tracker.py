@@ -30,6 +30,14 @@ class ModelUsage:
     cost_usd: float = 0.0
 
 
+@dataclass(frozen=True)
+class UsageSnapshot:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    calls: int = 0
+    cost_usd: float = 0.0
+
+
 @dataclass
 class CostTracker:
     max_dollars: float = field(default_factory=lambda: settings.max_dollars)
@@ -48,6 +56,10 @@ class CostTracker:
     @property
     def total_output_tokens(self) -> int:
         return sum(u.output_tokens for u in self.usage.values())
+
+    @property
+    def total_calls(self) -> int:
+        return sum(u.calls for u in self.usage.values())
 
     def record(self, model: str, input_tokens: int, output_tokens: int) -> float:
         """Record usage and return cost for this call."""
@@ -71,6 +83,26 @@ class CostTracker:
             logger.warning("Budget warning: $%.2f / $%.2f spent", total, self.max_dollars)
 
         return cost
+
+    def snapshot(self) -> UsageSnapshot:
+        """Capture cumulative usage at a point in time."""
+        with self._lock:
+            return UsageSnapshot(
+                input_tokens=self.total_input_tokens,
+                output_tokens=self.total_output_tokens,
+                calls=self.total_calls,
+                cost_usd=self.total_cost,
+            )
+
+    def delta(self, start: UsageSnapshot) -> UsageSnapshot:
+        """Return usage accumulated since a prior snapshot."""
+        current = self.snapshot()
+        return UsageSnapshot(
+            input_tokens=current.input_tokens - start.input_tokens,
+            output_tokens=current.output_tokens - start.output_tokens,
+            calls=current.calls - start.calls,
+            cost_usd=current.cost_usd - start.cost_usd,
+        )
 
     def check_budget(self) -> None:
         if self.total_cost >= self.max_dollars:
