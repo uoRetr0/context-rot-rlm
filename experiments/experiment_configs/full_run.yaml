@@ -7,7 +7,7 @@ benchmarks:
   multihop:
     num_samples: 30
     hops: [2, 3]
-    doc_length: 10000
+    doc_lengths: [10000, 50000, 100000, 500000]
   longbench:
     datasets: ["qasper", "narrativeqa"]
     max_samples: 50

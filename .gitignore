@@ -10,6 +10,7 @@ results/
 
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.egg-info/
@@ -19,6 +20,7 @@ build/
 
 # Jupyter
 .ipynb_checkpoints/
+notebooks/*.executed.ipynb
 
 # IDE
 .vscode/
@@ -33,3 +35,12 @@ Thumbs.db
 # Embedding cache
 *.npy
 embeddings_cache/
+
+# LaTeX build artifacts
+report/*.aux
+report/*.fdb_latexmk
+report/*.fls
+report/*.log
+report/*.out
+report/*.synctex.gz
+report/*.toc
