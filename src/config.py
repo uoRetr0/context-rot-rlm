@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     rlm_max_chunks_per_step: int = _YAML["rlm"]["max_chunks_per_step"]
     rlm_initial_chunks: int = _YAML["rlm"]["initial_chunks"]
     rlm_sub_question_chunks: int = _YAML["rlm"]["sub_question_chunks"]
+    rlm_max_steps: int = _YAML["rlm"]["max_steps"]
+    rlm_history_chars: int = _YAML["rlm"]["history_chars"]
 
     # Baselines
     fullcontext_max_tokens: int = _YAML["fullcontext"]["max_input_tokens"]

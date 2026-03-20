@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -24,7 +25,83 @@ _PRICING: dict[str, dict[str, float]] = {
 
 _client: genai.Client | None = None
 _last_call_time: float = 0.0
-_MIN_CALL_INTERVAL: float = 0.3  # seconds between API calls to avoid rate limits
+_MIN_CALL_INTERVAL: float = 1.0  # slower pacing reduces short-window rate-limit spikes
+
+
+def _extract_string_field(raw: str, field: str) -> str | None:
+    pattern = rf'"{re.escape(field)}"\s*:\s*"((?:[^"\\]|\\.)*)"'
+    match = re.search(pattern, raw, flags=re.DOTALL)
+    if match:
+        candidate = match.group(1)
+        try:
+            return json.loads(f'"{candidate}"')
+        except json.JSONDecodeError:
+            repaired = (
+                candidate
+                .replace("\\'", "'")
+                .replace('\\"', '"')
+                .replace("\\n", "\n")
+                .replace("\\t", "\t")
+                .replace("\\r", "\r")
+                .replace("\\\\", "\\")
+            )
+            return repaired
+    return None
+
+
+def _extract_number_field(raw: str, field: str) -> float | None:
+    pattern = rf'"{re.escape(field)}"\s*:\s*(-?\d+(?:\.\d+)?)'
+    match = re.search(pattern, raw)
+    if match:
+        return float(match.group(1))
+    return None
+
+
+def _extract_bool_field(raw: str, field: str) -> bool | None:
+    pattern = rf'"{re.escape(field)}"\s*:\s*(true|false)'
+    match = re.search(pattern, raw, flags=re.IGNORECASE)
+    if match:
+        return match.group(1).lower() == "true"
+    return None
+
+
+def _extract_array_field(raw: str, field: str) -> list[Any] | None:
+    pattern = rf'"{re.escape(field)}"\s*:\s*(\[[^\]]*\])'
+    match = re.search(pattern, raw, flags=re.DOTALL)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+
+
+def _repair_json_object(raw: str) -> dict[str, Any]:
+    """Best-effort recovery for partially malformed JSON responses."""
+    repaired: dict[str, Any] = {}
+
+    for field in ("answer", "reasoning", "thought", "code"):
+        value = _extract_string_field(raw, field)
+        if value is not None:
+            repaired[field] = value
+
+    confidence = _extract_number_field(raw, "confidence")
+    if confidence is not None:
+        repaired["confidence"] = confidence
+
+    requires_multi_hop = _extract_bool_field(raw, "requires_multi_hop")
+    if requires_multi_hop is not None:
+        repaired["requires_multi_hop"] = requires_multi_hop
+
+    for field in ("evidence_used", "sub_questions", "search_queries"):
+        value = _extract_array_field(raw, field)
+        if value is not None:
+            repaired[field] = value
+
+    if repaired:
+        return repaired
+
+    raise json.JSONDecodeError("Unable to repair JSON response", raw, 0)
 
 
 def _get_client() -> genai.Client:
@@ -114,8 +191,12 @@ def generate_json(
         start = raw.find("{")
         end = raw.rfind("}") + 1
         if start >= 0 and end > start:
-            return json.loads(raw[start:end])
-        raise
+            candidate = raw[start:end]
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                raw = candidate
+        return _repair_json_object(raw)
 
 
 def embed(texts: list[str], *, model: str | None = None) -> list[list[float]]:

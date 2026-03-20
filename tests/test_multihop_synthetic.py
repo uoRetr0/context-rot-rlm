@@ -2,7 +2,7 @@
 
 import random
 
-from benchmarks.multihop_synthetic import _generate_2hop, _generate_3hop
+from benchmarks.multihop_synthetic import _generate_2hop, _generate_3hop, generate_benchmark
 
 
 def test_generate_2hop_contains_aliases_and_distractors():
@@ -21,3 +21,13 @@ def test_generate_3hop_contains_distractor_chain():
     assert "satellite lab" in sample.document
     assert "collaborated with" in sample.document
     assert len(sample.bridge_facts) == 3
+
+
+def test_generate_benchmark_supports_500k_lengths():
+    samples = generate_benchmark(num_samples=1, hops_list=[2, 3], doc_lengths=[500000])
+
+    assert len(samples) == 2
+    assert sorted((sample.hops, sample.doc_length) for sample in samples) == [
+        (2, 500000),
+        (3, 500000),
+    ]

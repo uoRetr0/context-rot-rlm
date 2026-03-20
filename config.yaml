@@ -30,6 +30,8 @@ rlm:
   max_chunks_per_step: 10         # Was 5 — match RAG baseline
   initial_chunks: 10              # Top-level retrieval count
   sub_question_chunks: 5          # Sub-question retrieval count
+  max_steps: 8
+  history_chars: 5000
 
 # ── Baselines ──
 fullcontext:
@@ -48,10 +50,25 @@ benchmarks:
     haystack_lengths: [1000, 5000, 10000, 25000, 50000, 100000]
     needle_positions: [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0]
     num_samples: 5
+    distractor_count: 0
+  needle_haystack_stress:
+    haystack_lengths: [10000, 50000, 100000, 250000]
+    needle_positions: [0.1, 0.5, 0.9]
+    num_samples: 3
+    distractor_count: 6
+    distractor_repeat_factor: 1
+    confusion_block_repeats: 0
+  needle_haystack_challenging:
+    haystack_lengths: [100000, 250000, 500000]
+    needle_positions: [0.1, 0.5, 0.9]
+    num_samples: 3
+    distractor_count: 6
+    distractor_repeat_factor: 4
+    confusion_block_repeats: 6
   multihop:
     num_samples: 15
     hops: [2, 3]
-    doc_lengths: [10000, 50000, 100000]
+    doc_lengths: [10000, 50000, 100000, 500000]
   longbench:
     datasets: ["qasper", "narrativeqa"]
     max_samples: 50

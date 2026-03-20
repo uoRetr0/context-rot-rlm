@@ -33,6 +33,16 @@ logger = logging.getLogger(__name__)
 RESULTS_DIR = PROJECT_ROOT / settings.output_dir
 
 
+def _require_google_api_key() -> None:
+    """Fail fast before burning a run on guaranteed auth errors."""
+    if settings.google_api_key.strip():
+        return
+    raise RuntimeError(
+        "GOOGLE_API_KEY is not set. Add it to the environment or a .env file "
+        "before running live Gemini benchmarks."
+    )
+
+
 def get_controller(method: str, model: str | None = None) -> BaseController:
     """Factory for controllers."""
     controllers = {
@@ -161,10 +171,11 @@ def run_needle_haystack(
     model: str | None = None,
     max_samples: int | None = None,
     save_as: str = "needle_haystack",
+    difficulty: str = "standard",
 ) -> list[SampleResult]:
     """Run needle-in-haystack benchmark."""
     methods = methods or settings.methods
-    samples = gen_needle()
+    samples = gen_needle(difficulty=difficulty)
     if max_samples:
         samples = samples[:max_samples]
 
@@ -173,9 +184,10 @@ def run_needle_haystack(
     if not remaining:
         logger.info("needle: all methods already complete, skipping")
         return results
+    _require_google_api_key()
 
-    logger.info("Running needle-haystack: %d samples x %d methods (skipping %s)",
-                len(samples), len(remaining), done_methods or "none")
+    logger.info("Running needle-haystack (%s): %d samples x %d methods (skipping %s)",
+                difficulty, len(samples), len(remaining), done_methods or "none")
 
     for method in remaining:
         controller = get_controller(method, model)
@@ -200,6 +212,9 @@ def run_needle_haystack(
                     metadata={
                         "haystack_length": sample.haystack_length,
                         "needle_position": sample.needle_position,
+                        "requested_needle_position": getattr(sample, "requested_position", sample.needle_position),
+                        "difficulty": getattr(sample, "difficulty", difficulty),
+                        "distractor_count": len(getattr(sample, "distractor_texts", [])),
                     },
                 ))
             except BudgetExceededError:
@@ -222,6 +237,9 @@ def run_needle_haystack(
                         "error_type": error_type,
                         "haystack_length": sample.haystack_length,
                         "needle_position": sample.needle_position,
+                        "requested_needle_position": getattr(sample, "requested_position", sample.needle_position),
+                        "difficulty": getattr(sample, "difficulty", difficulty),
+                        "distractor_count": len(getattr(sample, "distractor_texts", [])),
                     },
                 ))
 
@@ -248,6 +266,7 @@ def run_multihop(
     if not remaining:
         logger.info("multihop: all methods already complete, skipping")
         return results
+    _require_google_api_key()
 
     logger.info("Running multihop: %d samples x %d methods (skipping %s)",
                 len(samples), len(remaining), done_methods or "none")
@@ -313,6 +332,7 @@ def run_longbench(
     if not remaining:
         logger.info("longbench: all methods already complete, skipping")
         return results
+    _require_google_api_key()
 
     logger.info("Running longbench: %d samples x %d methods (skipping %s)",
                 len(samples), len(remaining), done_methods or "none")
@@ -393,6 +413,7 @@ def run_musique(
     if not remaining:
         logger.info("musique: all methods already complete, skipping")
         return results
+    _require_google_api_key()
 
     logger.info("Running MuSiQue: %d samples x %d methods (skipping %s)",
                 len(samples), len(remaining), done_methods or "none")
@@ -469,6 +490,7 @@ def run_pro_musique(
     n = max_samples or cfg.get("num_samples", 10)
     samples = load_musique(max_samples=n)
     model = settings.model_pro
+    _require_google_api_key()
 
     results: list[SampleResult] = []
 
@@ -703,10 +725,10 @@ def run_all_experiments() -> None:
     # Phase B (RLM 3-hop) — run separately on day 2:
     # run_pro_musique(phase="B")
 
-    # Cost summary
-    print("\n" + tracker.summary())
-    cost_path = RESULTS_DIR / "cost_summary.txt"
-    cost_path.write_text(tracker.summary())
+    from analysis.plots import generate_all_plots
+
+    logger.info("=== Plots ===")
+    generate_all_plots()
 
 
 if __name__ == "__main__":
