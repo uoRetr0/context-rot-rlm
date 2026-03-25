@@ -3,6 +3,7 @@
 \usepackage[margin=1in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
+\usepackage{cite}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{array}
@@ -21,7 +22,7 @@
 
 \title{Defeating Context Rot: Recursive Retrieval for Long-Document Question Answering}
 \author{}
-\date{March 20, 2026}
+\date{March 22, 2026}
 
 \begin{document}
 \maketitle
@@ -33,13 +34,8 @@ Large language models can fail when important facts are buried in long documents
 \section{Introduction}
 Long-document QA is difficult even when a model has a large context window. Accuracy can still drop when the answer is buried deep in the text or when the task requires linking distant facts. Recursive Language Models (RLMs) address this by treating the document as an external environment that the model can inspect step by step instead of reading everything in one pass \cite{liu2024lost, zhang2025rlm}. This project implements that idea as faithfully as practical in an API-based system and compares it with standard long-context baselines, especially one-shot retrieval-augmented generation \cite{lewis2020rag}.
 
-\section{Contributions}
-\begin{itemize}
-  \item \textbf{Technical ambition.} The project goes beyond a standard RAG pipeline by implementing a bounded recursive controller over an external document environment and comparing it against three baselines under the same budget framework.
-  \item \textbf{Engineering.} The codebase includes chunking and hybrid retrieval, resumable benchmark runners, trace export, budget and token accounting, retry/backoff guard rails for transient API failures, and a passing automated test suite of 53 tests.
-  \item \textbf{Rigour.} The retained canonical run covers 2,003 evaluations, and the project also includes targeted follow-up audits such as the harder 500k challenging needle diagnostic and the matched-overlap audit for the Pro MuSiQue slice.
-  \item \textbf{Research context.} The evaluation is grounded in prior work on long-context failure modes, recursive language models, RAG, LongBench, and MuSiQue \cite{liu2024lost, zhang2025rlm, lewis2020rag, bai2023longbench, trivedi2022musique}.
-\end{itemize}
+\section{Literature Review}
+Prior work suggests that long-context failures are not solved by larger windows alone. Liu et al.\ show that models are often weakest when relevant evidence appears in the middle of a long prompt, motivating the context-rot problem studied here \cite{liu2024lost}. RAG addresses this by moving evidence outside the prompt and retrieving once before answering, but that single-pass design can still struggle on multi-hop or compositional questions \cite{lewis2020rag}. Recursive alternatives try to solve this by breaking long reasoning into smaller steps: Wu et al.\ show that hierarchical summarization can manage long inputs, and Zhang et al.\ formalize this idea with Recursive Language Models that inspect an external environment recursively \cite{wu2021books, zhang2025rlm}. LongBench and MuSiQue then provide useful evaluation settings for broad long-context understanding and explicit multi-hop reasoning \cite{bai2023longbench, trivedi2022musique}. The gap for this project is practical: there is strong motivation for recursive control, but fewer clear reproductions of prompt-based RLM-style systems under fixed API budgets.
 
 \section{Method and Setup}
 The RLM controller operates through a small tool interface:
